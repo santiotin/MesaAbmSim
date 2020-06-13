@@ -2,6 +2,9 @@ from mesa import Agent, Model
 from mesa.time import RandomActivation
 from mesa.space import MultiGrid
 from mesa.datacollection import DataCollector
+from mesa.visualization.modules import CanvasGrid
+from mesa.visualization.modules import ChartModule
+from mesa.visualization.ModularVisualization import ModularServer
 # import matplotlib.pyplot as plt
 # import numpy as np
 
@@ -54,14 +57,18 @@ class OceanModel(Model):
         self.schedule.step()
         self.datacollector.collect(self)
 
-        if(self.num_seaweed == 0 and self.num_fish == 0 and self.num_shark == 0):
+        if(self.num_seaweed == 0 and self.num_fish == 0):
+            self.running = False
+        elif(self.num_fish == 0 and self.num_shark == 0):
+            self.running = False
+        elif(self.num_seaweed == 0 and self.num_shark == 0):
             self.running = False
 
 class Shark(Agent):
     """ An agent with fixed initial wealth."""
     def __init__(self, unique_id, model):
         super().__init__(unique_id, model)
-        self.wealth = 50
+        self.wealth = 30
 
     def step(self):
         self.move()
@@ -70,7 +77,7 @@ class Shark(Agent):
         else:
             self.searchFood()
             n = self.random.randrange(30)
-            if(n == 1):
+            if( n == 1):
                 self.reproduce()
 
     def move(self):
@@ -87,9 +94,10 @@ class Shark(Agent):
         for mate in cellmates:
             if isinstance(mate, Fish):
                 self.eat(mate)
+                break
     
     def eat(self, fish):
-        self.wealth += fish.wealth
+        self.wealth += (fish.wealth / 2)
         fish.die()
 
     def reproduce(self):
@@ -202,4 +210,41 @@ class Seaweed(Agent):
         self.model.schedule.remove(self)
         self.model.num_seaweed -= 1
 
+def agent_portrayal(agent):
+    
+    if isinstance(agent, Seaweed):
+        portrayal = {"Shape": "rect", 
+                    "Filled": "true", 
+                    "w": 0.8, 
+                    "h": 0.8, 
+                    "Layer": 0,
+                    "Color": "forestgreen"}
         
+    else:
+        portrayal = {"Shape": "circle",
+                    "Filled": "true"}
+
+        if isinstance(agent, Fish):
+            portrayal["Color"] = "cornflowerblue"
+            portrayal["Layer"] = 2
+            portrayal["r"] = 0.4
+        if isinstance(agent, Shark):
+            portrayal["Color"] = "blueviolet"
+            portrayal["Layer"] = 1
+            portrayal["r"] = 0.6
+
+    return portrayal
+
+seaweed = {"Label": "Seaweed", "Color": "forestgreen"}
+fish = {"Label": "Fish", "Color": "cornflowerblue"}
+shark = {"Label": "Shark", "Color": "blueviolet"}
+
+chart = ChartModule([seaweed, fish, shark])
+
+grid = CanvasGrid(agent_portrayal, 25, 25, 500, 500)
+server = ModularServer(OceanModel,
+                       [grid, chart],
+                       "Ocean Model",
+                       {"nseaweed":150, "nfish":50, "nshark":3, "width":25, "height":25})
+server.port = 8522 
+server.launch()        
